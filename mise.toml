@@ -19,3 +19,22 @@ run = "python3 -c 'import json, room_engine; print(json.dumps({\"activeRoomId\":
 [tasks.check]
 description = "現在アクティブな部屋の干渉・動線チェックを実行"
 run = "python3 -c 'import json, room_engine; print(json.dumps(room_engine.analyze_layout(room_engine.load_room_doc()), ensure_ascii=False, indent=2))'"
+
+[tasks.test]
+description = "ユニットテスト・仕様テストを実行 (unittest)"
+run = "python3 -m unittest discover -s tests -v"
+
+[tasks.lint]
+description = "構文・型注釈・未使用import・カタログと3Dメッシュの整合性チェックを実行"
+run = "python3 scripts/quality_check.py --lint"
+
+[tasks.sast]
+description = "SASTセキュリティ検査・個人データ混入チェックを実行"
+run = "python3 scripts/quality_check.py --sast"
+
+[tasks.ci]
+description = "Lint・SAST・Unit Testを一括実行"
+run = [
+  "python3 scripts/quality_check.py --lint --sast",
+  "python3 -m unittest discover -s tests -v",
+]

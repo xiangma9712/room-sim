@@ -24,6 +24,12 @@ mise run rooms
 
 # 4. アクティブな部屋のレイアウト診断
 mise run check
+
+# 5. テスト・Lint・SAST の実行
+mise run test
+mise run lint
+mise run sast
+mise run ci
 ```
 
 ---

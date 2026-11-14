@@ -282,30 +282,7 @@ TOOLS: List[Dict[str, Any]] = [
 
 
 def _apply_theme_colors_to_item(item: Dict[str, Any], palette: Dict[str, str]) -> None:
-    ftype = item.get("type", "box")
-    if ftype == "bed":
-        item["color"] = palette["wood"]
-        item["subColor"] = palette["fabric"]
-    elif ftype == "sofa":
-        item["color"] = palette["fabric"]
-        item["subColor"] = palette["wood"]
-    elif ftype in ("low_table", "dining_table", "desk"):
-        item["color"] = palette["wood"]
-        item["subColor"] = palette["metal"]
-    elif ftype in ("round_table", "side_table"):
-        item["color"] = palette["wood"]
-        item["subColor"] = palette["subFabric"]
-    elif ftype in ("bookshelf", "tv_board"):
-        item["color"] = palette["wood"]
-        item["subColor"] = palette["subFabric"]
-    elif ftype == "wardrobe":
-        item["color"] = palette["subFabric"]
-        item["subColor"] = palette["wood"]
-    elif ftype in ("chair", "office_chair"):
-        item["color"] = palette["subFabric"] if ftype == "chair" else palette["metal"]
-        item["subColor"] = palette["wood"]
-    elif ftype in ("rug", "rug_round"):
-        item["color"] = palette["rug"]
+    room_engine.apply_theme_colors_to_item(item, palette)
 
 
 def handle_tool_call(name: str, args: Dict[str, Any]) -> Dict[str, Any]:

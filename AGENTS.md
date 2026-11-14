@@ -7,7 +7,7 @@
 
 ## 1. シミュレーター本体と個人データの分離ルール（重要）
 - **本体コードに個人データを混ぜない**:
-  - `room_engine.py`, `mcp_server.py`, `static/app.js`, `static/index.html` には汎用的なシミュレーター機能・汎用家具カタログのみを記述してください。
+  - `catalog.py`, `room_engine.py`, `mcp_server.py`, `static/app.js`, `static/meshes.js`, `static/index.html` には汎用的なシミュレーター機能・汎用家具カタログのみを記述してください。
   - 個人の図面寸法や具体的な部屋構成、特定の購入商品名（ブランド・型番など）は必ず `data/rooms/<room_id>.json`（Git管理外）側に保存してください。
 - **部屋ごとの独立管理**:
   - 各部屋は `data/rooms/<room_id>.json` に独立して保存されます。部屋を切り替える際は `switch_room`（または各ツールの `room_id` 引数）を使用し、ある部屋の家具変更が他の部屋に影響しないようにしてください。
@@ -48,4 +48,4 @@
 3. 変更後は必ず返却される `layout_analysis`（または `analyze_layout` ツール）を確認し、以下をチェックする：
    - `issues`（壁からのはみ出し、柱・室内構造との衝突、家具同士の衝突、開き戸の開閉干渉）が **0件** であること。
    - 人が通るメイン動線に約60cm以上の通路幅が確保されていること。
-4. 新しい種類の家具を汎用カタログに追加する場合は、`room_engine.py` の `FURNITURE_CATALOG` と `static/app.js` の `createFurnitureMesh()` に3Dプロシージャルモデルを追加する（箱だけのフォールバックにせず、脚や天板・柵などの形状を作る）。
+4. 新しい種類の家具を汎用カタログに追加する場合は、`catalog.py` の `FURNITURE_CATALOG` と `static/meshes.js` の `createFurnitureMesh()` に3Dプロシージャルモデルを追加し、`mise run ci`（Lint・SAST・Unit Test）がすべて通ることを確認する（箱だけのフォールバックにせず、脚や天板・柵などの形状を作る）。
