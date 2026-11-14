@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import json
 import re
 import sys
 from pathlib import Path
@@ -48,17 +49,52 @@ PRODUCTION_FILES = [
     ROOT_DIR / "static" / "app.js",
     ROOT_DIR / "static" / "meshes.js",
     ROOT_DIR / "static" / "index.html",
+    ROOT_DIR / "README.md",
+    ROOT_DIR / "AGENTS.md",
+    ROOT_DIR / ".mcp.json",
+    ROOT_DIR / "mise.toml",
+    ROOT_DIR / "scripts" / "quality_check.py",
+    ROOT_DIR / "tests" / "test_room_sim.py",
 ]
 
-# Personal / brand terms that must stay in `data/rooms/*.json` and never leak into simulator code
-FORBIDDEN_PERSONAL_TERMS = [
-    "FLEXISPOT",
-    "LOWYA",
-    "unico",
-    "DIX W800",
-    "モアトリエ",
-    "ld_combined",
-]
+HOME_PATH_RE = re.compile(r"/(?:Users|home)/[A-Za-z0-9_.-]+")
+
+
+def _collect_dynamic_personal_terms() -> Set[str]:
+    """
+    Dynamically extracts room IDs, room names, and non-catalog item names
+    from gitignored `data/rooms/*.json` so no personal strings are hardcoded in repo files.
+    """
+    sys.path.insert(0, str(ROOT_DIR))
+    import catalog  # noqa: E402
+
+    generic_names = {spec["name"] for spec in catalog.FURNITURE_CATALOG.values()}
+    generic_presets = set(catalog.FURNITURE_CATALOG.keys()) | {"sample_room", "custom"}
+
+    terms: Set[str] = {str(Path.home())}
+    rooms_dir = ROOT_DIR / "data" / "rooms"
+    if not rooms_dir.exists():
+        return terms
+
+    for rpath in rooms_dir.glob("*.json"):
+        try:
+            doc = json.loads(rpath.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        room_id = str(doc.get("id", rpath.stem)).strip()
+        if room_id and room_id not in generic_presets:
+            terms.add(room_id)
+        room_name = str(doc.get("room", {}).get("name", "")).strip()
+        if room_name and room_name != "新規ルーム" and room_name != "サンプルルーム":
+            terms.add(room_name)
+        for item in doc.get("furniture", []):
+            preset = str(item.get("preset", "")).strip()
+            if preset and preset not in generic_presets:
+                terms.add(preset)
+            name = str(item.get("name", "")).strip()
+            if name and name not in generic_names and len(name) >= 4:
+                terms.add(name)
+    return terms
 
 
 def _collect_used_names(tree: ast.AST) -> Set[str]:
@@ -224,15 +260,21 @@ def run_sast() -> List[str]:
                                         f"[SAST] {rel}:{node.lineno}: subprocess call with shell=True is forbidden"
                                     )
 
-    # 2. Personal data separation guard (AGENTS.md Rule 1)
+    # 2. Personal data & local path separation guard (AGENTS.md Rule 1)
+    dynamic_personal_terms = _collect_dynamic_personal_terms()
     for prod_path in PRODUCTION_FILES:
         rel = prod_path.relative_to(ROOT_DIR)
         content = prod_path.read_text(encoding="utf-8")
-        for term in FORBIDDEN_PERSONAL_TERMS:
-            if term in content:
+        for term in dynamic_personal_terms:
+            if term and term in content:
                 errors.append(
-                    f"[SAST] {rel}: Personal/specific brand data '{term}' leaked into simulator code (violates AGENTS.md Rule 1)"
+                    f"[SAST] {rel}: Personal room/item data '{term}' from data/rooms/ leaked into tracked file"
                 )
+        match = HOME_PATH_RE.search(content)
+        if match:
+            errors.append(
+                f"[SAST] {rel}: Local user path '{match.group(0)}' leaked into tracked file"
+            )
 
     # 3. Path traversal protection verification on room_engine._sanitize_room_id
     sys.path.insert(0, str(ROOT_DIR))

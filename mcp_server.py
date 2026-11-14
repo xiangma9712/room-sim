@@ -44,8 +44,8 @@ TOOLS: List[Dict[str, Any]] = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "room_id": {"type": "string", "description": "部屋の一意なID (例: 'ldk', 'bedroom_1')"},
-                "name": {"type": "string", "description": "部屋の表示名 (例: 'リビング・ダイニング 12.5畳')"},
+                "room_id": {"type": "string", "description": "部屋の一意なID (例: 'main_room', 'study_room')"},
+                "name": {"type": "string", "description": "部屋の表示名 (例: 'メインルーム')"},
                 "width": {"type": "number", "description": "東西の幅 (cm)"},
                 "depth": {"type": "number", "description": "南北の奥行 (cm)"},
                 "height": {"type": "number", "description": "天井高 (cm)"},
