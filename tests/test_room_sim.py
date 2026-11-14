@@ -122,20 +122,30 @@ class TestCatalogAndThemesContract(unittest.TestCase):
 
     def test_apply_theme_colors_to_item(self) -> None:
         palette = catalog.STYLE_THEMES["japandi"]["palette"]
-        desk = dict(catalog.FURNITURE_CATALOG["desk"])
+        for key, spec in catalog.FURNITURE_CATALOG.items():
+            with self.subTest(preset=key):
+                self.assertIn(spec["type"], catalog.TYPE_THEME_PALETTE_MAP)
+
+        desk = dict(catalog.FURNITURE_CATALOG["standing_desk"])
         catalog.apply_theme_colors_to_item(desk, palette)
         self.assertEqual(desk["color"], palette["wood"])
         self.assertEqual(desk["subColor"], palette["metal"])
 
-        sofa = dict(catalog.FURNITURE_CATALOG["sofa_2p"])
-        catalog.apply_theme_colors_to_item(sofa, palette)
-        self.assertEqual(sofa["color"], palette["fabric"])
-        self.assertEqual(sofa["subColor"], palette["wood"])
+        crib = dict(catalog.FURNITURE_CATALOG["baby_crib"])
+        catalog.apply_theme_colors_to_item(crib, palette)
+        self.assertEqual(crib["color"], palette["wood"])
+        self.assertEqual(crib["subColor"], palette["subFabric"])
 
-        bed = dict(catalog.FURNITURE_CATALOG["bed_low_sd"])
-        catalog.apply_theme_colors_to_item(bed, palette)
-        self.assertEqual(bed["color"], palette["wood"])
-        self.assertEqual(bed["subColor"], palette["fabric"])
+        bench = dict(catalog.FURNITURE_CATALOG["dining_bench"])
+        catalog.apply_theme_colors_to_item(bench, palette)
+        self.assertEqual(bench["color"], palette["wood"])
+        self.assertEqual(bench["subColor"], palette["fabric"])
+
+        plant = dict(catalog.FURNITURE_CATALOG["plant"])
+        orig_leaf_color = plant["color"]
+        catalog.apply_theme_colors_to_item(plant, palette)
+        self.assertEqual(plant["color"], orig_leaf_color)
+        self.assertEqual(plant["subColor"], palette["subFabric"])
 
     def test_frontend_mesh_builder_covers_all_catalog_types(self) -> None:
         meshes_js = (Path(__file__).parent.parent / "static" / "meshes.js").read_text(encoding="utf-8")
@@ -278,6 +288,27 @@ class TestLayoutAnalyzer(unittest.TestCase):
         )
         res = room_engine.analyze_layout(state)
         self.assertEqual(res["issues"][0]["type"], "structure_collision")
+
+    def test_floor_coverage_excludes_structures_and_tuck_in_overlap(self) -> None:
+        # Room 300x300 = 90,000 cm2 (9.0 m2)
+        # Structure 100x90 = 9,000 cm2 -> usable_area = 81,000 cm2 (8.1 m2)
+        # Desk (100x60 = 6,000) at x=150, z=50 (z: 20..80)
+        # Chair (60x60 = 3,600) at x=150, z=90 (z: 60..120) -> 20cm overlap in Z (60x20 = 1,200 cm2 overlap)
+        # Exact union of furniture = 6,000 + 3,600 - 1,200 = 8,400 cm2
+        # Coverage = 8,400 / 81,000 = 10.37% -> 10.4%
+        state = self._base_state(
+            furniture=[
+                {"id": "d1", "type": "desk", "name": "デスク", "width": 100, "depth": 60, "x": 150, "z": 50, "rotation": 0},
+                {"id": "c1", "type": "chair", "name": "チェア", "width": 60, "depth": 60, "x": 150, "z": 90, "rotation": 0},
+            ],
+            structures=[
+                {"id": "st1", "name": "柱", "kind": "pillar", "x": 50, "z": 255, "width": 100, "depth": 90, "height": 240},
+            ],
+        )
+        res = room_engine.analyze_layout(state)
+        self.assertEqual(res["room_area_m2"], 9.0)
+        self.assertEqual(res["usable_area_m2"], 8.1)
+        self.assertEqual(res["floor_coverage_pct"], 10.4)
 
 
 class TestMultiRoomIsolationAndMCPTools(IsolatedDataTestCase):

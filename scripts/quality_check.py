@@ -150,7 +150,7 @@ def run_lint() -> List[str]:
                         f"[LINT] {rel}:{node.lineno}: Public function '{node.name}' is missing a return type annotation"
                     )
 
-    # 3. Check parity between catalog.FURNITURE_CATALOG and static/meshes.js createFurnitureMesh
+    # 3. Check parity between catalog.FURNITURE_CATALOG, TYPE_THEME_PALETTE_MAP, and static/meshes.js
     sys.path.insert(0, str(ROOT_DIR))
     import catalog  # noqa: E402
 
@@ -160,6 +160,10 @@ def run_lint() -> List[str]:
         if f'"{item_type}"' not in meshes_src and f"'{item_type}'" not in meshes_src:
             errors.append(
                 f"[LINT] Catalog item '{cat_key}' (type='{item_type}') has no 3D mesh builder in static/meshes.js"
+            )
+        if item_type not in catalog.TYPE_THEME_PALETTE_MAP:
+            errors.append(
+                f"[LINT] Catalog item '{cat_key}' (type='{item_type}') is missing from catalog.TYPE_THEME_PALETTE_MAP"
             )
 
     # 4. Check JS ES Module imports/exports alignment between app.js and meshes.js

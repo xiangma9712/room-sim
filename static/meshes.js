@@ -235,6 +235,7 @@ export function buildRoomGeometry(room, roomGroup, helperGroup, wallMeshes) {
     if (kind === "kitchen_system") {
       const kGroup = new THREE.Group();
       kGroup.position.set(wx, 0, wz);
+      kGroup.rotation.y = (-Number(st.rotation || 0) * Math.PI) / 180;
 
       const cabMat = new THREE.MeshStandardMaterial({ color: st.color || "#d6cbbd", roughness: 0.7 });
       const topMat = new THREE.MeshStandardMaterial({ color: "#e5e7eb", roughness: 0.25, metalness: 0.25 });
@@ -252,20 +253,23 @@ export function buildRoomGeometry(room, roomGroup, helperGroup, wallMeshes) {
       worktop.receiveShadow = true;
       kGroup.add(worktop);
 
-      // Stove (West side)
-      const stove = new THREE.Mesh(new THREE.BoxGeometry(58, 1.5, 42), darkMat);
-      stove.position.set(-sw / 2 + 42, sh + 0.5, 0);
+      // Proportional stove & sink layout supporting `st.sinkSide` ("east"/"right" default, or "west"/"left")
+      const sinkOnWest = st.sinkSide === "west" || st.sinkSide === "left";
+      const sideSign = sinkOnWest ? -1 : 1;
+      const stoveW = Math.min(58, sw * 0.28);
+      const stoveD = Math.min(42, sd * 0.65);
+      const stoveX = -sideSign * (sw / 2 - stoveW / 2 - Math.max(8, sw * 0.06));
+      const stove = new THREE.Mesh(new THREE.BoxGeometry(stoveW, 1.5, stoveD), darkMat);
+      stove.position.set(stoveX, sh + 0.5, 0);
       kGroup.add(stove);
 
-      // Sink basin (East side)
-      const sinkW = 72;
-      const sinkD = 44;
-      const sinkX = sw / 2 - 52;
+      const sinkW = Math.min(72, sw * 0.35);
+      const sinkD = Math.min(44, sd * 0.68);
+      const sinkX = sideSign * (sw / 2 - sinkW / 2 - Math.max(10, sw * 0.07));
       const sink = new THREE.Mesh(new THREE.BoxGeometry(sinkW, 2, sinkD), metalMat);
       sink.position.set(sinkX, sh + 0.3, 2);
       kGroup.add(sink);
 
-      // Gooseneck Faucet (水栓)
       const faucetPipe = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 28, 12), metalMat);
       faucetPipe.position.set(sinkX, sh + 14, -sinkD / 2 + 4);
       kGroup.add(faucetPipe);
@@ -277,6 +281,7 @@ export function buildRoomGeometry(room, roomGroup, helperGroup, wallMeshes) {
     } else if (kind === "counter") {
       const cGroup = new THREE.Group();
       cGroup.position.set(wx, 0, wz);
+      cGroup.rotation.y = (-Number(st.rotation || 0) * Math.PI) / 180;
       const wallMat = new THREE.MeshStandardMaterial({ color: st.color || "#f2efe9", roughness: 0.85 });
       const boardMat = new THREE.MeshStandardMaterial({ color: "#dfc196", roughness: 0.55 });
       const body = new THREE.Mesh(new THREE.BoxGeometry(sw, sh - 4, sd - 4), wallMat);
@@ -450,17 +455,21 @@ export function createFurnitureMesh(item) {
       addBox(5.5, (H - topT) * 0.55, 5.5, sx * legX, (H - topT) * 0.72, 0, subMat);
     }
 
-    const uwW = Math.min(W * 0.72, 84);
-    const uwH = 36;
-    const screenMat = new THREE.MeshStandardMaterial({
-      color: "#111318",
-      roughness: 0.18,
-      metalness: 0.6,
-    });
-    addBox(6, 18, 6, 0, H + 9, -D / 2 + 8, darkMat);
-    addBox(uwW, uwH, 3, 0, H + 12 + uwH / 2, -D / 2 + 12, darkMat);
-    addBox(uwW - 2, uwH - 2, 3.3, 0, H + 12 + uwH / 2, -D / 2 + 12.3, screenMat);
-    addBox(34, 1.2, 12, 0, H + 0.6, 8, darkMat);
+    const monitorMode = item.monitor !== undefined ? item.monitor : "ultrawide";
+    if (monitorMode && monitorMode !== "none") {
+      const isStandard = monitorMode === "standard";
+      const monW = isStandard ? Math.min(W * 0.5, 58) : Math.min(W * 0.72, 84);
+      const monH = isStandard ? 34 : 36;
+      const screenMat = new THREE.MeshStandardMaterial({
+        color: "#111318",
+        roughness: 0.18,
+        metalness: 0.6,
+      });
+      addBox(6, 18, 6, 0, H + 9, -D / 2 + 8, darkMat);
+      addBox(monW, monH, 3, 0, H + 12 + monH / 2, -D / 2 + 12, darkMat);
+      addBox(monW - 2, monH - 2, 3.3, 0, H + 12 + monH / 2, -D / 2 + 12.3, screenMat);
+      addBox(34, 1.2, 12, 0, H + 0.6, 8, darkMat);
+    }
   } else if (ftype === "balance_ball") {
     const r = Math.min(W, D, H) / 2;
     const ballMat = new THREE.MeshStandardMaterial({
@@ -527,17 +536,22 @@ export function createFurnitureMesh(item) {
     addBox(1.5, bodyH - 4, 2, -W / 6, legH + bodyH / 2, D / 2 + 0.3, darkMat);
     addBox(1.5, bodyH - 4, 2, W / 6, legH + bodyH / 2, D / 2 + 0.3, darkMat);
 
-    const tvInch = Number(item.tvInch || 56);
-    const tvW = Math.round(tvInch * 2.54 * 0.871);
-    const tvH = Math.round(tvInch * 2.54 * 0.490);
-    const screenMat = new THREE.MeshStandardMaterial({
-      color: "#111318",
-      roughness: 0.18,
-      metalness: 0.6,
-    });
-    addBox(tvW + 2, tvH + 2, 3.5, 0, H + tvH / 2 + 6, 0, darkMat);
-    addBox(tvW - 1, tvH - 1, 4.0, 0, H + tvH / 2 + 6, 0.3, screenMat);
-    addBox(28, 6, 18, 0, H + 3, 0, darkMat);
+    const tvInch =
+      item.tvInch !== undefined
+        ? Number(item.tvInch)
+        : Math.round(Math.min(65, Math.max(32, W * 0.32)));
+    if (tvInch > 0) {
+      const tvW = Math.round(tvInch * 2.54 * 0.871);
+      const tvH = Math.round(tvInch * 2.54 * 0.490);
+      const screenMat = new THREE.MeshStandardMaterial({
+        color: "#111318",
+        roughness: 0.18,
+        metalness: 0.6,
+      });
+      addBox(tvW + 2, tvH + 2, 3.5, 0, H + tvH / 2 + 6, 0, darkMat);
+      addBox(tvW - 1, tvH - 1, 4.0, 0, H + tvH / 2 + 6, 0.3, screenMat);
+      addBox(28, 6, 18, 0, H + 3, 0, darkMat);
+    }
   } else if (ftype === "bookshelf") {
     addBox(3, H, D, -W / 2 + 1.5, H / 2, 0, mainMat);
     addBox(3, H, D, W / 2 - 1.5, H / 2, 0, mainMat);

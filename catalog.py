@@ -5,7 +5,7 @@ Separated from engine & server logic for easy maintenance.
 """
 
 from __future__ import annotations
-from typing import Any, Dict, Set, Tuple
+from typing import Any, Dict, Optional, Set, Tuple
 
 STYLE_THEMES: Dict[str, Dict[str, Any]] = {
     "nordic": {
@@ -397,29 +397,39 @@ TABLE_SEAT_PAIRS: Tuple[Set[str], ...] = (
 )
 
 
+# Declarative mapping from furniture `type` to (primary_palette_key, secondary_palette_key).
+# None preserves the item's intrinsic color (e.g. green plant leaves or warm lamp shade).
+TYPE_THEME_PALETTE_MAP: Dict[str, Tuple[Optional[str], Optional[str]]] = {
+    "bed": ("wood", "fabric"),
+    "baby_crib": ("wood", "subFabric"),
+    "sofa": ("fabric", "wood"),
+    "low_table": ("wood", "metal"),
+    "dining_table": ("wood", "metal"),
+    "desk": ("wood", "metal"),
+    "standing_desk": ("wood", "metal"),
+    "round_table": ("wood", "subFabric"),
+    "side_table": ("wood", "subFabric"),
+    "bookshelf": ("wood", "subFabric"),
+    "tv_board": ("wood", "subFabric"),
+    "kitchen_cabinet": ("wood", "metal"),
+    "wardrobe": ("subFabric", "wood"),
+    "chair": ("subFabric", "wood"),
+    "bench": ("wood", "fabric"),
+    "office_chair": ("metal", "wood"),
+    "balance_ball": ("fabric", "subFabric"),
+    "rug": ("rug", None),
+    "rug_round": ("rug", None),
+    "baby_pen": ("subFabric", "rug"),
+    "plant": (None, "subFabric"),
+    "floor_lamp": (None, "metal"),
+}
+
+
 def apply_theme_colors_to_item(item: Dict[str, Any], palette: Dict[str, str]) -> None:
-    """Harmonizes a furniture item's primary and secondary colors to the given theme palette."""
-    ftype = item.get("type", "box")
-    if ftype == "bed":
-        item["color"] = palette["wood"]
-        item["subColor"] = palette["fabric"]
-    elif ftype == "sofa":
-        item["color"] = palette["fabric"]
-        item["subColor"] = palette["wood"]
-    elif ftype in ("low_table", "dining_table", "desk"):
-        item["color"] = palette["wood"]
-        item["subColor"] = palette["metal"]
-    elif ftype in ("round_table", "side_table"):
-        item["color"] = palette["wood"]
-        item["subColor"] = palette["subFabric"]
-    elif ftype in ("bookshelf", "tv_board"):
-        item["color"] = palette["wood"]
-        item["subColor"] = palette["subFabric"]
-    elif ftype == "wardrobe":
-        item["color"] = palette["subFabric"]
-        item["subColor"] = palette["wood"]
-    elif ftype in ("chair", "office_chair"):
-        item["color"] = palette["subFabric"] if ftype == "chair" else palette["metal"]
-        item["subColor"] = palette["wood"]
-    elif ftype in ("rug", "rug_round"):
-        item["color"] = palette["rug"]
+    """Harmonizes a furniture item's primary and secondary colors using TYPE_THEME_PALETTE_MAP."""
+    ftype = str(item.get("type", ""))
+    color_key, sub_color_key = TYPE_THEME_PALETTE_MAP.get(ftype, (None, None))
+    if color_key and color_key in palette:
+        item["color"] = palette[color_key]
+    if sub_color_key and sub_color_key in palette:
+        item["subColor"] = palette[sub_color_key]

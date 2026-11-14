@@ -307,6 +307,43 @@ def compute_wall_snap_position(
     return (round(x, 1), round(z, 1), round(rot, 1))
 
 
+def _compute_union_area(
+    rects: List[Tuple[float, float, float, float]],
+    room_w: float,
+    room_d: float,
+) -> float:
+    """Computes the exact 2D union area of axis-aligned rectangles clipped to [0, room_w] x [0, room_d]."""
+    clipped: List[Tuple[float, float, float, float]] = []
+    xs_set = set()
+    zs_set = set()
+    for x1, x2, z1, z2 in rects:
+        cx1 = max(0.0, min(room_w, x1))
+        cx2 = max(0.0, min(room_w, x2))
+        cz1 = max(0.0, min(room_d, z1))
+        cz2 = max(0.0, min(room_d, z2))
+        if cx2 > cx1 and cz2 > cz1:
+            clipped.append((cx1, cx2, cz1, cz2))
+            xs_set.add(cx1)
+            xs_set.add(cx2)
+            zs_set.add(cz1)
+            zs_set.add(cz2)
+    if not clipped:
+        return 0.0
+    xs = sorted(xs_set)
+    zs = sorted(zs_set)
+    area = 0.0
+    for i in range(len(xs) - 1):
+        mid_x = (xs[i] + xs[i + 1]) * 0.5
+        dx = xs[i + 1] - xs[i]
+        for j in range(len(zs) - 1):
+            mid_z = (zs[j] + zs[j + 1]) * 0.5
+            for rx1, rx2, rz1, rz2 in clipped:
+                if rx1 <= mid_x <= rx2 and rz1 <= mid_z <= rz2:
+                    area += dx * (zs[j + 1] - zs[j])
+                    break
+    return area
+
+
 def analyze_layout(state: Dict[str, Any]) -> Dict[str, Any]:
     room = state.get("room", {})
     room_w = float(room.get("width", 360))
@@ -417,12 +454,14 @@ def analyze_layout(state: Dict[str, Any]) -> Dict[str, Any]:
                     "message": f"「{it.get('name')}」が {wall}壁のドア/扉の開閉・出入りゾーン（{int(clearance_depth)}cm）を塞いでいます",
                 })
 
+    structure_aabbs: List[Tuple[float, float, float, float]] = []
     for st in room.get("structures", []):
         sx = float(st.get("x", 0))
         sz = float(st.get("z", 0))
         sw = float(st.get("width", 10))
         sd = float(st.get("depth", 10))
         sx1, sx2, sz1, sz2 = sx - sw / 2, sx + sw / 2, sz - sd / 2, sz + sd / 2
+        structure_aabbs.append((sx1, sx2, sz1, sz2))
         for it in solid_items:
             ax1, ax2, az1, az2 = aabbs[it["id"]]
             ov_x = min(ax2, sx2) - max(ax1, sx1)
@@ -436,11 +475,14 @@ def analyze_layout(state: Dict[str, Any]) -> Dict[str, Any]:
                 })
 
     room_area = room_w * room_d
-    furniture_area = sum(
-        float(it.get("width", 0)) * float(it.get("depth", 0))
-        for it in solid_items
+    structure_area = _compute_union_area(structure_aabbs, room_w, room_d)
+    usable_area = max(room_area * 0.2, room_area - structure_area)
+    furniture_area = _compute_union_area(
+        [aabbs[it["id"]] for it in solid_items],
+        room_w,
+        room_d,
     )
-    coverage_pct = round((furniture_area / room_area) * 100.0, 1) if room_area > 0 else 0.0
+    coverage_pct = round((furniture_area / usable_area) * 100.0, 1) if usable_area > 0 else 0.0
     if coverage_pct > 42.0:
         warnings.append({
             "type": "high_density",
@@ -454,6 +496,7 @@ def analyze_layout(state: Dict[str, Any]) -> Dict[str, Any]:
         "status": status,
         "room_dimensions_cm": {"width": room_w, "depth": room_d, "height": room.get("height", 240)},
         "room_area_m2": round(room_area / 10000.0, 2),
+        "usable_area_m2": round(usable_area / 10000.0, 2),
         "floor_coverage_pct": coverage_pct,
         "coverage_evaluation": (
             "ゆとりあり (Spacious)" if coverage_pct < 25
