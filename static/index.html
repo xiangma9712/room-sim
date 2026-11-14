@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Room-Sim | 3D インテリアシミュレーター</title>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+      }
+    }
+  </script>
+  <style>
+    :root {
+      --bg-panel: rgba(20, 22, 27, 0.88);
+      --bg-card: rgba(34, 38, 46, 0.92);
+      --bg-hover: rgba(52, 58, 70, 0.95);
+      --border: rgba(255, 255, 255, 0.12);
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --accent: #6ee7b7;
+      --accent-blue: #60a5fa;
+      --danger: #f87171;
+      --warn: #fbbf24;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
+      background: #141619;
+      color: var(--text);
+      overflow: hidden;
+      height: 100vh;
+      width: 100vw;
+      user-select: none;
+    }
+    #canvas-container {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+    }
+
+    /* Compact Floating Top Bar */
+    .topbar {
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--bg-panel);
+      backdrop-filter: blur(14px);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 6px 10px;
+      box-shadow: 0 8px 28px rgba(0,0,0,0.4);
+      white-space: nowrap;
+      max-width: calc(100vw - 24px);
+    }
+    .divider {
+      width: 1px;
+      height: 20px;
+      background: var(--border);
+      margin: 0 2px;
+    }
+    .sync-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 8px var(--accent);
+      display: inline-block;
+      margin-left: 4px;
+    }
+
+    button, select.toolbar-select {
+      background: var(--bg-card);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    button:hover, select.toolbar-select:hover {
+      background: var(--bg-hover);
+      border-color: rgba(255,255,255,0.25);
+    }
+    button.active {
+      background: rgba(96, 165, 250, 0.22);
+      border-color: var(--accent-blue);
+      color: #93c5fd;
+      font-weight: 600;
+    }
+    button.mode-edit.active {
+      background: rgba(110, 231, 183, 0.2);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    button.danger {
+      background: rgba(248, 113, 113, 0.15);
+      border-color: rgba(248, 113, 113, 0.4);
+      color: #fca5a5;
+    }
+    button.danger:hover {
+      background: rgba(248, 113, 113, 0.28);
+    }
+
+    /* Notification Badge on Diagnostics Button */
+    .badge-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1px 6px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 700;
+    }
+    .badge-ok {
+      background: rgba(110, 231, 183, 0.18);
+      color: var(--accent);
+    }
+    .badge-warn {
+      background: rgba(251, 191, 36, 0.25);
+      color: var(--warn);
+    }
+    .badge-err {
+      background: rgba(248, 113, 113, 0.3);
+      color: #fca5a5;
+    }
+
+    /* Popover Menus (Hidden by default, open on click) */
+    .popover {
+      position: absolute;
+      top: 58px;
+      z-index: 25;
+      background: var(--bg-panel);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      box-shadow: 0 12px 36px rgba(0,0,0,0.5);
+      display: none;
+      width: 310px;
+      max-height: calc(100vh - 90px);
+      overflow-y: auto;
+    }
+    .popover.open {
+      display: block;
+    }
+    .popover-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+    }
+    .close-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 2px 6px;
+      font-size: 14px;
+    }
+
+    .catalog-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+    .catalog-item {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      padding: 7px 9px;
+      text-align: left;
+      gap: 2px;
+    }
+    .catalog-item .name { font-weight: 600; font-size: 12px; }
+    .catalog-item .dims { font-size: 10px; color: var(--text-muted); }
+
+    .field-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    .field-row.three {
+      grid-template-columns: 1fr 1fr 1fr;
+    }
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .field label {
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+    input[type="number"], input[type="text"], select {
+      background: rgba(15, 17, 21, 0.85);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 5px 7px;
+      border-radius: 6px;
+      font-size: 12px;
+      width: 100%;
+    }
+    input[type="color"] {
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      height: 28px;
+      width: 100%;
+      cursor: pointer;
+    }
+
+    /* Diagnostics Popover Items */
+    .diag-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .diag-issue {
+      padding: 7px 9px;
+      border-radius: 6px;
+      font-size: 11px;
+      line-height: 1.4;
+    }
+    .diag-issue.error {
+      background: rgba(248, 113, 113, 0.16);
+      border-left: 3px solid var(--danger);
+      color: #fecaca;
+    }
+    .diag-issue.warning {
+      background: rgba(251, 191, 36, 0.14);
+      border-left: 3px solid var(--warn);
+      color: #fde68a;
+    }
+    .diag-ok {
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 0;
+    }
+
+    /* Floating Selected Item Inspector (Bottom Right, only in Edit mode when selected) */
+    .floating-inspector {
+      position: absolute;
+      bottom: 16px;
+      right: 16px;
+      width: 260px;
+      z-index: 20;
+      background: var(--bg-panel);
+      backdrop-filter: blur(14px);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.45);
+      display: none;
+    }
+
+    .help-hint {
+      position: absolute;
+      bottom: 12px;
+      left: 16px;
+      z-index: 10;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      padding: 5px 12px;
+      border-radius: 999px;
+      font-size: 11px;
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="canvas-container"></div>
+
+  <!-- Compact Single Top Toolbar -->
+  <header class="topbar">
+    <span class="sync-dot" title="MCP Live Sync Connected"></span>
+
+    <!-- Room Selector Dropdown -->
+    <select id="room-select" class="toolbar-select" title="コーディネートする部屋を切り替え"></select>
+    <button id="btn-new-room" title="新しい部屋を追加">＋部屋</button>
+
+    <div class="divider"></div>
+
+    <!-- Interaction Mode Toggle (Default = Orbit Camera) -->
+    <button id="btn-mode-camera" class="active" title="ドラッグで視点回転・ホイールでズーム">📷 視点操作</button>
+    <button id="btn-mode-edit" class="mode-edit" title="家具をクリックして選択・ドラッグで移動 (ショートカット: E)">✋ 家具移動</button>
+
+    <div class="divider"></div>
+
+    <!-- Compact Popover Triggers -->
+    <button id="btn-pop-catalog">＋ 家具追加</button>
+    <button id="btn-pop-room">🎨 内装・寸法</button>
+    <button id="btn-pop-diag">
+      <span>📐 診断</span>
+      <span id="diag-badge" class="badge-pill badge-ok">OK</span>
+    </button>
+
+    <div class="divider"></div>
+
+    <!-- Camera Presets -->
+    <button id="btn-view-3d" class="active">3D</button>
+    <button id="btn-view-2d">2D</button>
+    <button id="btn-view-eye">目線</button>
+    <button id="btn-toggle-walls" class="active" title="手前の壁を自動透過">壁透過</button>
+  </header>
+
+  <!-- Popover 1: Add Furniture Catalog -->
+  <div id="pop-catalog" class="popover" style="left: 50%; transform: translateX(-60px);">
+    <div class="popover-header">
+      <span>家具カタログ（クリックで追加）</span>
+      <button class="close-btn" data-close="pop-catalog">✕</button>
+    </div>
+    <div class="catalog-grid" id="catalog-buttons"></div>
+  </div>
+
+  <!-- Popover 2: Room Config & Style Theme -->
+  <div id="pop-room" class="popover" style="left: 50%; transform: translateX(0px);">
+    <div class="popover-header">
+      <span>部屋サイズ・内装スタイル</span>
+      <button class="close-btn" data-close="pop-room">✕</button>
+    </div>
+    <div class="field-row three">
+      <div class="field">
+        <label>幅 X (cm)</label>
+        <input type="number" id="room-width" step="10" min="120" max="1200" />
+      </div>
+      <div class="field">
+        <label>奥行 Z (cm)</label>
+        <input type="number" id="room-depth" step="10" min="120" max="1200" />
+      </div>
+      <div class="field">
+        <label>天井高 H</label>
+        <input type="number" id="room-height" step="5" min="200" max="350" />
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>床材</label>
+        <select id="room-floor-type">
+          <option value="oak">オーク</option>
+          <option value="walnut">ウォールナット</option>
+          <option value="ash">ホワイトアッシュ</option>
+          <option value="tile">モダンタイル</option>
+          <option value="carpet">カーペット</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>照明ムード</label>
+        <select id="room-lighting">
+          <option value="daylight">昼光</option>
+          <option value="warm">電球色</option>
+          <option value="evening">間接照明</option>
+          <option value="studio">スタジオ</option>
+        </select>
+      </div>
+    </div>
+    <div style="font-size: 11px; color: var(--text-muted); margin: 8px 0 6px;">スタイル一括変更</div>
+    <div class="catalog-grid" id="theme-buttons"></div>
+    <button id="btn-clear-furniture" class="danger" style="width: 100%; justify-content: center; margin-top: 10px;">
+      この部屋の全家具をクリア
+    </button>
+  </div>
+
+  <!-- Popover 3: Layout Diagnostics -->
+  <div id="pop-diag" class="popover" style="left: 50%; transform: translateX(60px);">
+    <div class="popover-header">
+      <span id="diag-header-title">レイアウト・動線診断</span>
+      <button class="close-btn" data-close="pop-diag">✕</button>
+    </div>
+    <div id="coverage-label" style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;"></div>
+    <div class="diag-list" id="diagnostics-box"></div>
+  </div>
+
+  <!-- Floating Inspector (Only visible when an item is selected in Edit Mode) -->
+  <aside id="inspector-section" class="floating-inspector">
+    <div class="popover-header">
+      <span>選択中の家具を編集</span>
+      <button class="close-btn" id="btn-close-inspector">✕</button>
+    </div>
+    <div class="field" style="margin-bottom: 6px;">
+      <label>名前</label>
+      <input type="text" id="insp-name" />
+    </div>
+    <div class="field-row three">
+      <div class="field">
+        <label>X (cm)</label>
+        <input type="number" id="insp-x" step="5" />
+      </div>
+      <div class="field">
+        <label>Z (cm)</label>
+        <input type="number" id="insp-z" step="5" />
+      </div>
+      <div class="field">
+        <label>回転 (°)</label>
+        <input type="number" id="insp-rot" step="45" />
+      </div>
+    </div>
+    <div class="field-row three">
+      <div class="field">
+        <label>幅 W</label>
+        <input type="number" id="insp-w" step="5" />
+      </div>
+      <div class="field">
+        <label>奥行 D</label>
+        <input type="number" id="insp-d" step="5" />
+      </div>
+      <div class="field">
+        <label>高さ H</label>
+        <input type="number" id="insp-h" step="5" />
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>メイン色</label>
+        <input type="color" id="insp-color" />
+      </div>
+      <div class="field">
+        <label>サブ色</label>
+        <input type="color" id="insp-subcolor" />
+      </div>
+    </div>
+    <div class="field-row" style="margin-top: 4px;">
+      <button id="btn-rot-left" style="justify-content:center;">↺ 45°</button>
+      <button id="btn-rot-right" style="justify-content:center;">↻ 90° (R)</button>
+    </div>
+    <div class="catalog-grid" style="margin-top: 4px;">
+      <button class="wall-snap-btn" data-wall="north" style="justify-content:center;">北壁寄せ</button>
+      <button class="wall-snap-btn" data-wall="south" style="justify-content:center;">南壁寄せ</button>
+      <button class="wall-snap-btn" data-wall="west" style="justify-content:center;">西壁寄せ</button>
+      <button class="wall-snap-btn" data-wall="east" style="justify-content:center;">東壁寄せ</button>
+    </div>
+    <button id="btn-delete-item" class="danger" style="margin-top: 6px; width: 100%; justify-content: center;">
+      削除 (Delete)
+    </button>
+  </aside>
+
+  <div class="help-hint" id="mode-hint">
+    📷 視点操作モード: ドラッグで回転・右ドラッグで平行移動・ホイールでズーム ｜ [E] キーで「✋ 家具移動モード」に切替
+  </div>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

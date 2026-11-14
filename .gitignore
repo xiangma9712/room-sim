@@ -1,0 +1,18 @@
+# Personal room data
+data/
+room_state.json
+*.pdf
+
+# Python cache & virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+
+# Temp & OS files
+*.tmp
+.DS_Store

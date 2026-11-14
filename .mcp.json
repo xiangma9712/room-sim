@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "room-sim": {
+      "command": "mise",
+      "args": ["run", "mcp"]
+    }
+  }
+}

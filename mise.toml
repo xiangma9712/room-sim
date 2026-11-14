@@ -1,0 +1,21 @@
+[tools]
+python = "3.12"
+
+[env]
+PYTHONUNBUFFERED = "1"
+
+[tasks.dev]
+description = "3Dルームシミュレーター Webサーバーを起動 (http://localhost:8765)"
+run = "python3 server.py"
+
+[tasks.mcp]
+description = "インテリアシミュレーター MCPサーバーを起動 (stdio)"
+run = "python3 mcp_server.py"
+
+[tasks.rooms]
+description = "保存されている部屋一覧とアクティブな部屋を表示"
+run = "python3 -c 'import json, room_engine; print(json.dumps({\"activeRoomId\": room_engine.get_active_room_id(), \"rooms\": room_engine.list_rooms()}, ensure_ascii=False, indent=2))'"
+
+[tasks.check]
+description = "現在アクティブな部屋の干渉・動線チェックを実行"
+run = "python3 -c 'import json, room_engine; print(json.dumps(room_engine.analyze_layout(room_engine.load_room_doc()), ensure_ascii=False, indent=2))'"
