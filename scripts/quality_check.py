@@ -299,24 +299,15 @@ def run_sast() -> List[str]:
     if "0.0.0.0" in server_src:
         errors.append("[SAST] server.py binds to 0.0.0.0 instead of loopback (127.0.0.1)")
 
-    # 5. Frontend DOM XSS check: innerHTML assignments with template interpolation must use esc()
+    # 5. Frontend DOM XSS check: forbid template interpolation inside innerHTML
     for js_path in JS_FILES:
         rel = js_path.relative_to(ROOT_DIR)
         js_src = js_path.read_text(encoding="utf-8")
         for idx, line in enumerate(js_src.splitlines(), start=1):
             if ".innerHTML" in line and "${" in line:
-                # Every ${...} on a single-line innerHTML assignment should either be numeric or wrapped in esc(...)
-                interpolations = re.findall(r"\$\{([^}]+)\}", line)
-                for expr in interpolations:
-                    if not (
-                        expr.startswith("esc(")
-                        or expr.startswith("Number(")
-                        or "Math.round(" in expr
-                        or expr.endswith(".length")
-                    ):
-                        errors.append(
-                            f"[SAST] {rel}:{idx}: Potential unescaped interpolation '${{{expr}}}' in innerHTML"
-                        )
+                errors.append(
+                    f"[SAST] {rel}:{idx}: Avoid template interpolation in innerHTML; use createElement + textContent"
+                )
 
     return errors
 

@@ -583,7 +583,13 @@ async function init() {
   for (const [key, f] of Object.entries(catalogData.furniture_catalog)) {
     const btn = document.createElement("button");
     btn.className = "catalog-item";
-    btn.innerHTML = `<span class="name">+ ${esc(f.name)}</span><span class="dims">${Number(f.width)}×${Number(f.depth)}×${Number(f.height)}cm</span>`;
+    const nameSpan = document.createElement("span");
+    nameSpan.className = "name";
+    nameSpan.textContent = `+ ${f.name}`;
+    const dimsSpan = document.createElement("span");
+    dimsSpan.className = "dims";
+    dimsSpan.textContent = `${f.width}×${f.depth}×${f.height}cm`;
+    btn.append(nameSpan, dimsSpan);
     btn.addEventListener("click", async () => {
       closeAllPopovers();
       setInteractionMode("edit");
