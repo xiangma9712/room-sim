@@ -27,11 +27,16 @@ EXPECTED_CATALOG_KEYS = {
     "bed_single",
     "bed_semidouble",
     "bed_low_sd",
+    "sunoko_frame",
+    "mattress_sd",
+    "folding_mat_sd",
     "baby_crib",
     "bed_double",
     "sofa_2p",
     "sofa_3p",
     "sofa_1p",
+    "zaisu",
+    "floor_pouf",
     "low_table",
     "round_table",
     "dining_table",
@@ -49,9 +54,17 @@ EXPECTED_CATALOG_KEYS = {
     "side_table",
     "rug_m",
     "rug_round",
+    "play_mat",
     "plant",
     "floor_lamp",
+    "floor_lamp_low",
+    "air_purifier",
+    "water_server",
+    "auto_cooker",
+    "coffee_maker",
     "baby_pen",
+    "baby_gate",
+    "baby_guard_corner",
     "kitchen_cabinet",
 }
 
@@ -309,6 +322,20 @@ class TestLayoutAnalyzer(unittest.TestCase):
         self.assertEqual(res["room_area_m2"], 9.0)
         self.assertEqual(res["usable_area_m2"], 8.1)
         self.assertEqual(res["floor_coverage_pct"], 10.4)
+
+    def test_sunoko_and_mattresses_stack_without_collision(self) -> None:
+        state = self._base_state(
+            furniture=[
+                {"id": "s1", "type": "sunoko", "name": "すのこ", "width": 250, "depth": 200, "x": 150, "z": 120, "rotation": 0},
+                {"id": "m1", "type": "mattress", "name": "マットレス", "width": 120, "depth": 195, "x": 212, "z": 120, "rotation": 0},
+                {"id": "m2", "type": "folding_mat", "name": "折りたたみマット", "width": 120, "depth": 195, "x": 88, "z": 120, "rotation": 0},
+            ]
+        )
+        res = room_engine.analyze_layout(state)
+        self.assertEqual(res["error_count"], 0)
+        self.assertEqual([w for w in res["warnings"] if w["type"] == "narrow_passage"], [])
+        # Union footprint should equal the 250x200 sunoko (50,000 / 90,000 = 55.6%)
+        self.assertEqual(res["floor_coverage_pct"], 55.6)
 
 
 class TestMultiRoomIsolationAndMCPTools(IsolatedDataTestCase):

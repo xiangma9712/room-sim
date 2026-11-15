@@ -379,7 +379,11 @@ def analyze_layout(state: Dict[str, Any]) -> Dict[str, Any]:
                 "message": f"{it.get('name', iid)} が部屋の外にはみ出しています ({', '.join(out_walls)})",
             })
 
-    solid_items = [it for it in items if it.get("type") not in ("rug", "rug_round")]
+    solid_items = [
+        it
+        for it in items
+        if it.get("type") not in ("rug", "rug_round", "play_mat") and float(it.get("baseHeight", 0)) < 40.0
+    ]
     for i in range(len(solid_items)):
         for j in range(i + 1, len(solid_items)):
             a = solid_items[i]
@@ -391,6 +395,13 @@ def analyze_layout(state: Dict[str, Any]) -> Dict[str, Any]:
             overlap_z = min(az2, bz2) - max(az1, bz1)
 
             types_pair = {str(a.get("type", "")), str(b.get("type", ""))}
+            if types_pair in (
+                {"sunoko", "mattress"},
+                {"sunoko", "folding_mat"},
+                {"baby_guard", "tv_board"},
+                {"baby_guard", "water_server"},
+            ):
+                continue
             is_table_chair = types_pair in TABLE_SEAT_PAIRS
             max_allowed_overlap = 20.0 if is_table_chair else 1.5
 

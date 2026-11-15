@@ -178,6 +178,64 @@ export function buildRoomGeometry(room, roomGroup, helperGroup, wallMeshes) {
       const frame = new THREE.Mesh(new THREE.BoxGeometry(opW, opH, 4), frameMat);
       const glass = new THREE.Mesh(new THREE.BoxGeometry(opW - 8, opH - 8, 5), glassMat);
       opGroup.add(frame, glass);
+
+      // Curtain / Blind visualization (supports op.curtainStyle: "drape" | "blind" | "roll" | "none", and op.curtainColor)
+      const cStyle = op.curtainStyle || room.curtainStyle || "drape";
+      const cColor = op.curtainColor || room.curtainColor || "#e6e0d4";
+      if (cStyle !== "none") {
+        const railMat = new THREE.MeshStandardMaterial({ color: "#4b5563", metalness: 0.5, roughness: 0.4 });
+        const rail = new THREE.Mesh(new THREE.BoxGeometry(opW + 12, 2.5, 4), railMat);
+        rail.position.set(0, opH / 2 + 2.5, 4.5);
+        opGroup.add(rail);
+
+        if (cStyle === "blind") {
+          const slatMat = new THREE.MeshStandardMaterial({ color: cColor, roughness: 0.65 });
+          const slatCount = Math.min(18, Math.max(6, Math.round(opH / 12)));
+          for (let i = 0; i < slatCount; i++) {
+            const sy = opH / 2 - (i / slatCount) * (opH * 0.45) - 3;
+            const slat = new THREE.Mesh(new THREE.BoxGeometry(opW - 4, 1.2, 4.5), slatMat);
+            slat.position.set(0, sy, 4.5);
+            opGroup.add(slat);
+          }
+        } else if (cStyle === "roll") {
+          const rollMat = new THREE.MeshStandardMaterial({
+            color: cColor,
+            transparent: true,
+            opacity: 0.88,
+            roughness: 0.8,
+          });
+          const rollScreen = new THREE.Mesh(new THREE.BoxGeometry(opW - 4, opH * 0.38, 2), rollMat);
+          rollScreen.position.set(0, opH / 2 - (opH * 0.38) / 2, 4.5);
+          opGroup.add(rollScreen);
+        } else {
+          // Default "drape": sheer lace curtain across the window + pleated side drapes on left & right
+          const laceMat = new THREE.MeshStandardMaterial({
+            color: "#ffffff",
+            transparent: true,
+            opacity: 0.32,
+            roughness: 0.9,
+          });
+          const lace = new THREE.Mesh(new THREE.BoxGeometry(opW - 6, opH - 4, 1.5), laceMat);
+          lace.position.set(0, 0, 3.8);
+          opGroup.add(lace);
+
+          const drapeMat = new THREE.MeshStandardMaterial({ color: cColor, roughness: 0.85 });
+          const bundleW = Math.min(42, Math.max(22, opW * 0.18));
+          const pleatCount = 5;
+          const pleatW = bundleW / pleatCount;
+          for (const side of [-1, 1]) {
+            const baseX = side * (opW / 2 - bundleW / 2 + 2);
+            for (let p = 0; p < pleatCount; p++) {
+              const px = baseX + (p - (pleatCount - 1) / 2) * pleatW;
+              const pz = 2.0 + (p % 2 === 0 ? 1.5 : -1.0);
+              const pleat = new THREE.Mesh(new THREE.BoxGeometry(pleatW * 0.92, opH + 2, 7.5), drapeMat);
+              pleat.position.set(px, 0, pz);
+              pleat.castShadow = true;
+              opGroup.add(pleat);
+            }
+          }
+        }
+      }
     } else {
       const doorMat = new THREE.MeshStandardMaterial({
         color: otype === "closet" ? "#f3f2ee" : "#d6bfa3",
@@ -293,6 +351,77 @@ export function buildRoomGeometry(room, roomGroup, helperGroup, wallMeshes) {
       topBoard.castShadow = true;
       cGroup.add(body, topBoard);
       roomGroup.add(cGroup);
+    } else if (kind === "cupboard") {
+      // Kitchen back cupboard (Lower counter cabinet + middle open appliance bay with microwave & rice cooker + upper wall cabinet)
+      const cbGroup = new THREE.Group();
+      cbGroup.position.set(wx, 0, wz);
+      cbGroup.rotation.y = (-Number(st.rotation || 0) * Math.PI) / 180;
+
+      const cabMat = new THREE.MeshStandardMaterial({ color: st.color || "#e5dfd5", roughness: 0.72 });
+      const topMat = new THREE.MeshStandardMaterial({ color: "#f3f4f6", roughness: 0.3, metalness: 0.15 });
+      const backMat = new THREE.MeshStandardMaterial({ color: "#ede9e0", roughness: 0.85 });
+      const darkMat = new THREE.MeshStandardMaterial({ color: "#1f2937", roughness: 0.3, metalness: 0.45 });
+      const glassMat = new THREE.MeshStandardMaterial({ color: "#0f172a", roughness: 0.15, metalness: 0.7 });
+
+      const lowerH = Math.min(85, sh * 0.46);
+      const lowerBody = new THREE.Mesh(new THREE.BoxGeometry(sw, lowerH - 3, sd), cabMat);
+      lowerBody.position.set(0, (lowerH - 3) / 2, 0);
+      lowerBody.castShadow = true;
+      lowerBody.receiveShadow = true;
+      cbGroup.add(lowerBody);
+
+      const counterTop = new THREE.Mesh(new THREE.BoxGeometry(sw + 1, 3, sd + 1), topMat);
+      counterTop.position.set(0, lowerH - 1.5, 0);
+      counterTop.receiveShadow = true;
+      cbGroup.add(counterTop);
+
+      // Drawer/door seams on lower cabinet front (+Z)
+      const seam = new THREE.Mesh(new THREE.BoxGeometry(sw * 0.92, 1.2, 1.2), darkMat);
+      seam.position.set(0, lowerH * 0.55, sd / 2 + 0.2);
+      cbGroup.add(seam);
+
+      // Back panel & upper wall cabinet (if height > 110cm)
+      if (sh > 110) {
+        const backPanel = new THREE.Mesh(new THREE.BoxGeometry(sw, sh - lowerH, 2.5), backMat);
+        backPanel.position.set(0, lowerH + (sh - lowerH) / 2, -sd / 2 + 1.25);
+        cbGroup.add(backPanel);
+
+        const upperStartY = Math.max(lowerH + 48, sh * 0.71);
+        if (sh > upperStartY + 15) {
+          const upperH = sh - upperStartY;
+          const upperD = sd * 0.62;
+          const upperCab = new THREE.Mesh(new THREE.BoxGeometry(sw, upperH, upperD), cabMat);
+          upperCab.position.set(0, upperStartY + upperH / 2, -sd / 2 + upperD / 2);
+          upperCab.castShadow = true;
+          upperCab.receiveShadow = true;
+          cbGroup.add(upperCab);
+        }
+      }
+
+      // Microwave oven on the counter (West/Left side)
+      const mwW = Math.min(48, sw * 0.36);
+      const mwH = 30;
+      const mwD = Math.min(36, sd * 0.78);
+      const mwX = -sw * 0.22;
+      const mwBody = new THREE.Mesh(new THREE.BoxGeometry(mwW, mwH, mwD), darkMat);
+      mwBody.position.set(mwX, lowerH + mwH / 2, -2);
+      mwBody.castShadow = true;
+      cbGroup.add(mwBody);
+
+      const mwWindow = new THREE.Mesh(new THREE.BoxGeometry(mwW * 0.68, mwH * 0.66, 1.2), glassMat);
+      mwWindow.position.set(mwX - mwW * 0.08, lowerH + mwH / 2, -2 + mwD / 2 + 0.2);
+      cbGroup.add(mwWindow);
+
+      // Rice cooker on the counter (East/Right side)
+      const rcW = Math.min(25, sw * 0.2);
+      const rcH = 21;
+      const rcD = Math.min(28, sd * 0.65);
+      const rcBody = new THREE.Mesh(new THREE.BoxGeometry(rcW, rcH, rcD), topMat);
+      rcBody.position.set(sw * 0.18, lowerH + rcH / 2, 0);
+      rcBody.castShadow = true;
+      cbGroup.add(rcBody);
+
+      roomGroup.add(cbGroup);
     } else {
       const isWall = sh >= H - 10;
       const isPillar = kind === "pillar";
@@ -386,6 +515,49 @@ export function createFurnitureMesh(item) {
       const px = pCount === 2 ? (i === 0 ? -W * 0.22 : W * 0.22) : 0;
       addBox(pW, 8, 28, px, frameH + matH + 4, -D / 2 + 24, whiteMat);
     }
+  } else if (ftype === "sunoko") {
+    const beamH = Math.max(2.5, H * 0.52);
+    const slatH = Math.max(2.0, H - beamH);
+    const beamCount = W >= 180 ? 6 : 4;
+    for (let i = 0; i < beamCount; i++) {
+      const bx = -W / 2 + 6 + (i / (beamCount - 1)) * (W - 12);
+      addBox(4.5, beamH, D - 2, bx, beamH / 2, 0, subMat);
+    }
+    const slatD = 7.5;
+    const step = 9.8;
+    const splitTwo = W >= 160;
+    for (let z = -D / 2 + slatD / 2 + 1; z <= D / 2 - slatD / 2 - 1; z += step) {
+      if (splitTwo) {
+        const halfW = W / 2 - 1.2;
+        addBox(halfW, slatH, slatD, -W / 4 - 0.3, beamH + slatH / 2, z, mainMat);
+        addBox(halfW, slatH, slatD, W / 4 + 0.3, beamH + slatH / 2, z, mainMat);
+      } else {
+        addBox(W - 1, slatH, slatD, 0, beamH + slatH / 2, z, mainMat);
+      }
+    }
+  } else if (ftype === "mattress") {
+    const baseY = Number(item.baseHeight || 0);
+    const lowerH = Math.max(8, H * 0.62);
+    const topH = Math.max(4, H - lowerH);
+    addBox(W, lowerH, D, 0, baseY + lowerH / 2, 0, subMat);
+    addBox(W - 1, topH, D - 1, 0, baseY + lowerH + topH / 2, 0, mainMat);
+    addBox(W - 2, 2.5, D * 0.56, 0, baseY + H + 1.25, D * 0.18, whiteMat);
+    const pCount = W >= 115 ? 2 : 1;
+    const pW = pCount === 2 ? W * 0.38 : W * 0.55;
+    for (let i = 0; i < pCount; i++) {
+      const px = pCount === 2 ? (i === 0 ? -W * 0.22 : W * 0.22) : 0;
+      addBox(pW, 7, 26, px, baseY + H + 3.5, -D / 2 + 22, whiteMat);
+    }
+  } else if (ftype === "folding_mat") {
+    const baseY = Number(item.baseHeight || 0);
+    const panelGap = 1.4;
+    const panelD = (D - panelGap * 2) / 3;
+    for (let i = 0; i < 3; i++) {
+      const pz = -D / 2 + panelD / 2 + i * (panelD + panelGap);
+      addBox(W, H, panelD, 0, baseY + H / 2, pz, mainMat);
+    }
+    addBox(W * 0.86, 1.2, D * 0.52, 0, baseY + H + 0.6, D * 0.16, subMat);
+    addBox(W * 0.42, 3.2, 22, 0, baseY + H + 1.6, -D / 2 + 20, whiteMat);
   } else if (ftype === "baby_crib") {
     const bedY = Math.round(H * 0.48);
     for (const sx of [-1, 1]) {
@@ -428,6 +600,54 @@ export function createFurnitureMesh(item) {
     const armH = Math.min(H - legH - 12, 46);
     addBox(armW, armH, D, -W / 2 + armW / 2, legH + armH / 2, 0, mainMat);
     addBox(armW, armH, D, W / 2 - armW / 2, legH + armH / 2, 0, mainMat);
+  } else if (ftype === "zaisu") {
+    // 座椅子 (フロアチェア): 厚みのある座面クッション + 少し傾いた背もたれクッション
+    const seatH = Math.min(14, Math.max(10, Math.round(H * 0.25)));
+    const backT = Math.min(14, Math.max(10, Math.round(D * 0.2)));
+    const seatD = D - backT * 0.6;
+    // 座面クッション
+    addBox(W, seatH, seatD, 0, seatH / 2, backT * 0.3, mainMat);
+    // 座面の中央ステッチくぼみライン
+    addBox(W * 0.82, 1.2, seatD * 0.75, 0, seatH + 0.2, backT * 0.3, subMat);
+    // 背もたれクッション（少し後ろへ傾ける）
+    const backH = H - seatH * 0.6;
+    const backGeo = new THREE.BoxGeometry(W, backH, backT);
+    const backMesh = new THREE.Mesh(backGeo, mainMat);
+    backMesh.position.set(0, seatH * 0.7 + backH / 2, -D / 2 + backT / 2 + 3);
+    backMesh.rotation.x = -0.22;
+    backMesh.castShadow = true;
+    backMesh.receiveShadow = true;
+    g.add(backMesh);
+  } else if (ftype === "floor_pouf") {
+    // 丸型プーフ / ビーズクッション (上部ニットカバー + 下部キャンバス生地の2トーン球体フォルム)
+    const rx = W / 2;
+    const rz = D / 2;
+    const ry = H / 2;
+    // 上部ニットドーム (少しふっくらした丸み)
+    const topGeo = new THREE.SphereGeometry(1, 32, 18, 0, Math.PI * 2, 0, Math.PI * 0.58);
+    const topMesh = new THREE.Mesh(topGeo, mainMat);
+    topMesh.scale.set(rx, ry * 1.04, rz);
+    topMesh.position.set(0, ry * 0.98, 0);
+    topMesh.castShadow = true;
+    topMesh.receiveShadow = true;
+    g.add(topMesh);
+
+    // 下部キャンバスベース
+    const botGeo = new THREE.SphereGeometry(1, 32, 16, 0, Math.PI * 2, Math.PI * 0.54, Math.PI * 0.46);
+    const botMesh = new THREE.Mesh(botGeo, subMat);
+    botMesh.scale.set(rx * 0.98, ry * 0.98, rz * 0.98);
+    botMesh.position.set(0, ry * 0.98, 0);
+    botMesh.castShadow = true;
+    botMesh.receiveShadow = true;
+    g.add(botMesh);
+
+    // サイドの切り替えパイピングライン
+    const seamGeo = new THREE.TorusGeometry(1, 0.025, 10, 36);
+    const seamMesh = new THREE.Mesh(seamGeo, subMat);
+    seamMesh.rotation.x = Math.PI / 2;
+    seamMesh.scale.set(rx * 0.97, rz * 0.97, ry * 0.8);
+    seamMesh.position.set(0, ry * 0.86, 0);
+    g.add(seamMesh);
   } else if (ftype === "desk" || ftype === "dining_table" || ftype === "low_table" || ftype === "side_table") {
     const topT = 4;
     addBox(W, topT, D, 0, H - topT / 2, 0, mainMat);
@@ -510,18 +730,30 @@ export function createFurnitureMesh(item) {
       }
     }
   } else if (ftype === "chair" || ftype === "office_chair") {
-    const seatY = 43;
-    addBox(W * 0.85, 5, D * 0.85, 0, seatY, 0, mainMat);
-    addBox(W * 0.82, H - seatY, 5, 0, seatY + (H - seatY) / 2, -D * 0.38, mainMat);
+    const seatY = 42;
     if (ftype === "office_chair") {
+      addBox(W * 0.85, 5, D * 0.85, 0, seatY, 0, mainMat);
+      addBox(W * 0.82, H - seatY, 5, 0, seatY + (H - seatY) / 2, -D * 0.38, mainMat);
       addBox(5, seatY - 6, 5, 0, (seatY - 6) / 2 + 4, 0, subMat);
       addBox(W * 0.75, 4, 5, 0, 4, 0, subMat);
       addBox(5, 4, D * 0.75, 0, 4, 0, subMat);
     } else {
+      // Wooden dining chair with slatted backrest & solid seat
+      addBox(W * 0.88, 3.5, D * 0.86, 0, seatY, 0, mainMat);
       for (const sx of [-1, 1]) {
         for (const sz of [-1, 1]) {
-          addBox(3.5, seatY, 3.5, sx * (W * 0.36), seatY / 2, sz * (D * 0.36), subMat);
+          addBox(3.5, seatY, 3.5, sx * (W * 0.38), seatY / 2, sz * (D * 0.36), subMat);
         }
+      }
+      const backZ = -D * 0.36;
+      const backH = H - seatY;
+      // Side stiles + top rail + vertical slats
+      for (const sx of [-1, 1]) {
+        addBox(3.5, backH, 3.5, sx * (W * 0.38), seatY + backH / 2, backZ, subMat);
+      }
+      addBox(W * 0.84, 6.5, 3.6, 0, H - 3.25, backZ, mainMat);
+      for (const frac of [-0.22, -0.07, 0.07, 0.22]) {
+        addBox(2.2, backH - 7, 1.8, W * frac, seatY + (backH - 7) / 2, backZ, subMat);
       }
     }
   } else if (ftype === "tv_board") {
@@ -553,14 +785,27 @@ export function createFurnitureMesh(item) {
       addBox(28, 6, 18, 0, H + 3, 0, darkMat);
     }
   } else if (ftype === "bookshelf") {
-    addBox(3, H, D, -W / 2 + 1.5, H / 2, 0, mainMat);
-    addBox(3, H, D, W / 2 - 1.5, H / 2, 0, mainMat);
-    const shelves = Math.max(3, Math.round(H / 34));
-    for (let i = 0; i <= shelves; i++) {
-      const sy = (i / shelves) * (H - 4) + 2;
-      addBox(W, 3, D, 0, sy, 0, mainMat);
-      if (i < shelves && i % 2 === 1) {
-        addBox(W * 0.35, 22, D * 0.7, -W * 0.2, sy + 12.5, 0, subMat);
+    addBox(2.5, H, D, -W / 2 + 1.25, H / 2, 0, mainMat);
+    addBox(2.5, H, D, W / 2 - 1.25, H / 2, 0, mainMat);
+    if (H <= 50) {
+      // Low open cubby rack (e.g. kids picture-book & toy storage rack)
+      addBox(W, 2.5, D, 0, 2.5, 0, mainMat);
+      addBox(W, 2.5, D, 0, H - 1.25, 0, mainMat);
+      addBox(W - 4, H - 4, 1.5, 0, H / 2, -D / 2 + 0.8, mainMat);
+      const cols = Math.max(2, Math.round(W / 32));
+      for (let c = 1; c < cols; c++) {
+        const vx = -W / 2 + (c / cols) * W;
+        addBox(2.0, H - 5, D - 2, vx, H / 2, 0, mainMat);
+      }
+      addBox(W / cols - 6, H * 0.55, D * 0.78, -W / 2 + W / (cols * 2), H * 0.34, 1, subMat);
+    } else {
+      const shelves = Math.max(3, Math.round(H / 34));
+      for (let i = 0; i <= shelves; i++) {
+        const sy = (i / shelves) * (H - 4) + 2;
+        addBox(W, 3, D, 0, sy, 0, mainMat);
+        if (i < shelves && i % 2 === 1) {
+          addBox(W * 0.35, 22, D * 0.7, -W * 0.2, sy + 12.5, 0, subMat);
+        }
       }
     }
   } else if (ftype === "wardrobe") {
@@ -577,6 +822,55 @@ export function createFurnitureMesh(item) {
       g.add(m);
     } else {
       addBox(W, 1.5, D, 0, 0.8, 0, mainMat);
+    }
+  } else if (ftype === "play_mat") {
+    // クッションプレイマット (道路×ヘリンボーン調・厚さ1.5〜2cmのもっちりマット)
+    const matH = Math.max(1.5, Math.min(3.5, H || 1.8));
+    // ベースマット (アイボリー/クリーム)
+    addBox(W, matH, D, 0, matH / 2, 0, mainMat);
+    // エッジのやさしいパイピング枠 (ヘリンボーン裏地トーン)
+    const edgeMat = new THREE.MeshStandardMaterial({ color: "#d5c7b2", roughness: 0.75 });
+    const borderW = 3.5;
+    addBox(W, matH + 0.1, borderW, 0, matH / 2, -D / 2 + borderW / 2, edgeMat);
+    addBox(W, matH + 0.1, borderW, 0, matH / 2, D / 2 - borderW / 2, edgeMat);
+    addBox(borderW, matH + 0.1, D - borderW * 2, -W / 2 + borderW / 2, matH / 2, 0, edgeMat);
+    addBox(borderW, matH + 0.1, D - borderW * 2, W / 2 - borderW / 2, matH / 2, 0, edgeMat);
+
+    // 道路サーキット柄 (くすみグレーグリーン系の道路トラック + 白破線)
+    const roadW = Math.min(16, Math.min(W, D) * 0.11);
+    const rx = W * 0.34;
+    const rz = D * 0.31;
+    const topY = matH + 0.12;
+    // 外周ループ道路 (上下・左右・中央縦断道路)
+    addBox(rx * 2 + roadW, 0.2, roadW, 0, topY, -rz, subMat);
+    addBox(rx * 2 + roadW, 0.2, roadW, 0, topY, rz, subMat);
+    addBox(roadW, 0.2, rz * 2 - roadW, -rx, topY, 0, subMat);
+    addBox(roadW, 0.2, rz * 2 - roadW, rx, topY, 0, subMat);
+    addBox(roadW, 0.2, rz * 2 - roadW, 0, topY, 0, subMat);
+
+    // 中央ロータリー
+    const roundabout = new THREE.Mesh(
+      new THREE.CylinderGeometry(roadW * 0.95, roadW * 0.95, 0.22, 24),
+      subMat
+    );
+    roundabout.position.set(0, topY, 0);
+    g.add(roundabout);
+    const island = new THREE.Mesh(
+      new THREE.CylinderGeometry(roadW * 0.42, roadW * 0.42, 0.26, 20),
+      new THREE.MeshStandardMaterial({ color: "#9eb39d", roughness: 0.8 })
+    );
+    island.position.set(0, topY + 0.02, 0);
+    g.add(island);
+
+    // 道路の白破線と横断歩道アクセント
+    const lineMat = new THREE.MeshStandardMaterial({ color: "#faf8f5", roughness: 0.6 });
+    for (const sx of [-0.55, -0.25, 0.25, 0.55]) {
+      addBox(9, 0.26, 1.4, rx * sx * 1.4, topY + 0.02, -rz, lineMat);
+      addBox(9, 0.26, 1.4, rx * sx * 1.4, topY + 0.02, rz, lineMat);
+    }
+    for (const sz of [-0.45, 0.45]) {
+      addBox(1.4, 0.26, 8, -rx, topY + 0.02, rz * sz * 1.3, lineMat);
+      addBox(1.4, 0.26, 8, rx, topY + 0.02, rz * sz * 1.3, lineMat);
     }
   } else if (ftype === "plant") {
     const potR = Math.min(W, D) * 0.32;
@@ -607,28 +901,49 @@ export function createFurnitureMesh(item) {
       g.add(sp);
     }
   } else if (ftype === "floor_lamp") {
-    const baseR = Math.min(W, D) * 0.4;
-    const base = new THREE.Mesh(new THREE.CylinderGeometry(baseR, baseR, 3, 20), subMat);
-    base.position.set(0, 1.5, 0);
-    g.add(base);
-
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, H - 25, 12), subMat);
-    pole.position.set(0, (H - 25) / 2, 0);
-    g.add(pole);
-
     const shadeMat = new THREE.MeshStandardMaterial({
       color: item.color || "#fff6e0",
       emissive: item.color || "#ffe4b5",
-      emissiveIntensity: 0.65,
-      roughness: 0.4,
+      emissiveIntensity: 0.7,
+      roughness: 0.35,
     });
-    const shade = new THREE.Mesh(new THREE.CylinderGeometry(baseR * 0.7, baseR * 1.05, 26, 24), shadeMat);
-    shade.position.set(0, H - 14, 0);
-    g.add(shade);
+    if (H <= 60) {
+      // Low floor indirect lamp (wooden/metal base + glowing globe/cylinder shade)
+      const baseR = Math.min(W, D) * 0.38;
+      const baseH = Math.max(4, H * 0.16);
+      const base = new THREE.Mesh(new THREE.CylinderGeometry(baseR * 0.9, baseR, baseH, 24), subMat);
+      base.position.set(0, baseH / 2, 0);
+      base.castShadow = true;
+      g.add(base);
 
-    const pLight = new THREE.PointLight(0xffdfa8, 60, 260, 1.5);
-    pLight.position.set(0, H - 16, 0);
-    g.add(pLight);
+      const shadeR = Math.min(W, D) * 0.44;
+      const shadeH = H - baseH;
+      const globe = new THREE.Mesh(new THREE.SphereGeometry(shadeR, 24, 20), shadeMat);
+      globe.scale.set(1.0, (shadeH / (shadeR * 2)) * 1.05, 1.0);
+      globe.position.set(0, baseH + shadeH * 0.48, 0);
+      g.add(globe);
+
+      const pLight = new THREE.PointLight(0xffdfa8, 45, 220, 1.5);
+      pLight.position.set(0, baseH + shadeH * 0.5, 0);
+      g.add(pLight);
+    } else {
+      const baseR = Math.min(W, D) * 0.4;
+      const base = new THREE.Mesh(new THREE.CylinderGeometry(baseR, baseR, 3, 20), subMat);
+      base.position.set(0, 1.5, 0);
+      g.add(base);
+
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, H - 25, 12), subMat);
+      pole.position.set(0, (H - 25) / 2, 0);
+      g.add(pole);
+
+      const shade = new THREE.Mesh(new THREE.CylinderGeometry(baseR * 0.7, baseR * 1.05, 26, 24), shadeMat);
+      shade.position.set(0, H - 14, 0);
+      g.add(shade);
+
+      const pLight = new THREE.PointLight(0xffdfa8, 60, 260, 1.5);
+      pLight.position.set(0, H - 16, 0);
+      g.add(pLight);
+    }
   } else if (ftype === "baby_pen") {
     addBox(W - 4, 2.5, D - 4, 0, 1.25, 0, subMat);
     const railT = 3.5;
@@ -652,6 +967,51 @@ export function createFurnitureMesh(item) {
       addBox(1.8, H - 8, 1.8, -W / 2 + railT / 2, H / 2, z, mainMat);
       addBox(1.8, H - 8, 1.8, W / 2 - railT / 2, H / 2, z, mainMat);
     }
+  } else if (ftype === "baby_gate") {
+    // Single hallway/kitchen safety gate panel with vertical bars, end posts, and latch handle
+    const postT = 3.5;
+    addBox(postT, H, postT, -W / 2 + postT / 2, H / 2, 0, subMat);
+    addBox(postT, H, postT, W / 2 - postT / 2, H / 2, 0, subMat);
+    addBox(W, 3.2, 3.0, 0, 5, 0, mainMat);
+    addBox(W, 3.2, 3.0, 0, H - 2, 0, mainMat);
+    // Stabilizer floor feet at both ends
+    addBox(6, 2, Math.max(16, D * 2.5), -W / 2 + 4, 1, 0, subMat);
+    addBox(6, 2, Math.max(16, D * 2.5), W / 2 - 4, 1, 0, subMat);
+    const step = 8.5;
+    for (let x = -W / 2 + step; x <= W / 2 - step; x += step) {
+      addBox(1.5, H - 8, 1.5, x, H / 2 + 1, 0, mainMat);
+    }
+    // Gate lock handle on top rail
+    addBox(10, 2.5, 4.2, W * 0.18, H + 0.5, 0, darkMat);
+  } else if (ftype === "baby_guard") {
+    // U-shaped / L-shaped freestanding safety guard wrapping along East (+X), North (-Z), and South (+Z) edges (open on West -X wall side)
+    const railT = 3.2;
+    const frontX = W / 2 - railT / 2;
+    // Top & bottom horizontal rails on North (-Z), South (+Z), and East (+X) sides
+    for (const ry of [5, H - 2]) {
+      addBox(W, railT, railT, 0, ry, -D / 2 + railT / 2, mainMat);
+      addBox(W, railT, railT, 0, ry, D / 2 - railT / 2, mainMat);
+      addBox(railT, railT, D, frontX, ry, 0, mainMat);
+    }
+    // Corner & intermediate posts
+    for (const sz of [-1, 0, 1]) {
+      addBox(4, H, 4, frontX, H / 2, sz * (D / 2 - 2), subMat);
+    }
+    addBox(4, H, 4, -W / 2 + 2, H / 2, -D / 2 + 2, subMat);
+    addBox(4, H, 4, -W / 2 + 2, H / 2, D / 2 - 2, subMat);
+    // Floor stabilizer plates under front fence
+    for (const sz of [-0.35, 0, 0.35]) {
+      addBox(22, 1.6, 12, frontX - 6, 0.8, D * sz, subMat);
+    }
+    // Vertical safety bars along North, South, and East sides
+    const step = 11;
+    for (let x = -W / 2 + step; x <= W / 2 - step; x += step) {
+      addBox(1.5, H - 8, 1.5, x, H / 2 + 1, -D / 2 + railT / 2, mainMat);
+      addBox(1.5, H - 8, 1.5, x, H / 2 + 1, D / 2 - railT / 2, mainMat);
+    }
+    for (let z = -D / 2 + step; z <= D / 2 - step; z += step) {
+      addBox(1.5, H - 8, 1.5, frontX, H / 2 + 1, z, mainMat);
+    }
   } else if (ftype === "kitchen_cabinet") {
     const stainlessMat = new THREE.MeshStandardMaterial({
       color: item.subColor || "#d1d5db",
@@ -664,10 +1024,129 @@ export function createFurnitureMesh(item) {
     addBox(W * 0.88, 1.5, 1.5, 0, H * 0.46, D / 2 + 0.4, darkMat);
     addBox(W * 0.35, 1.8, 2.5, -W * 0.24, H * 0.40, D / 2 + 1.2, darkMat);
     addBox(W * 0.35, 1.8, 2.5, W * 0.24, H * 0.78, D / 2 + 1.2, darkMat);
+  } else if (ftype === "air_purifier") {
+    // Slim air purifier: low stand feet, matte chassis, floating front intake panel, top louver vent & LED indicator
+    const footH = 1.5;
+    addBox(W * 0.82, footH, D * 0.86, 0, footH / 2, 0, darkMat);
+    const bodyH = H - footH;
+    addBox(W - 0.8, bodyH, D - 1.2, 0, footH + bodyH / 2, -0.4, mainMat);
+    // Front floating intake panel (+Z side) with subtle side intake gap
+    addBox(W, bodyH - 2, 1.4, 0, footH + bodyH / 2, D / 2 - 0.7, mainMat);
+    // Top air outlet louver grille
+    addBox(W * 0.68, 1.2, D * 0.58, 0, H - 0.4, -D * 0.08, subMat);
+    for (let i = -2; i <= 2; i++) {
+      addBox(W * 0.62, 1.5, 0.8, 0, H + 0.1, -D * 0.08 + i * (D * 0.09), darkMat);
+    }
+    // Clean air blue-cyan indicator LED on front panel
+    const ledMat = new THREE.MeshStandardMaterial({
+      color: "#38bdf8",
+      emissive: "#0284c7",
+      emissiveIntensity: 0.85,
+    });
+    addBox(W * 0.42, 0.8, 0.6, 0, H * 0.82, D / 2 + 0.1, ledMat);
+  } else if (ftype === "water_server") {
+    // Slim floor-standing water dispenser with recessed dispensing bay, spigots, drip tray, and top cover
+    const lowerH = H * 0.58;
+    const bayH = H * 0.22;
+    const upperH = H - lowerH - bayH;
+    // Lower cabinet
+    addBox(W, lowerH, D, 0, lowerH / 2, 0, mainMat);
+    // Back spine behind dispensing bay
+    addBox(W, bayH, D * 0.68, 0, lowerH + bayH / 2, -D * 0.16, subMat);
+    // Side walls of dispensing bay
+    addBox(2.2, bayH, D * 0.32, -W / 2 + 1.1, lowerH + bayH / 2, D * 0.34, mainMat);
+    addBox(2.2, bayH, D * 0.32, W / 2 - 1.1, lowerH + bayH / 2, D * 0.34, mainMat);
+    // Drip tray
+    addBox(W - 4, 2.2, D * 0.34, 0, lowerH + 1.1, D * 0.35, darkMat);
+    // Hot & Cold spigots
+    addBox(2.0, 3.5, 2.0, -3.5, lowerH + bayH - 2.2, D * 0.26, darkMat);
+    addBox(2.0, 3.5, 2.0, 3.5, lowerH + bayH - 2.2, D * 0.26, darkMat);
+    // Upper section & bottle cover
+    addBox(W, upperH, D, 0, lowerH + bayH + upperH / 2, 0, mainMat);
+    addBox(W - 2, 1.5, D - 2, 0, H + 0.75, 0, subMat);
+  } else if (ftype === "auto_cooker") {
+    // Cylindrical drum pressure cooker (e.g. Bistro Auto Cooker) with copper/metallic top ring & side handles
+    const baseY = Number(item.baseHeight || 0);
+    const radius = Math.min(W, D) * 0.45;
+    const bodyH = H * 0.86;
+    const drum = new THREE.Mesh(
+      new THREE.CylinderGeometry(radius, radius * 0.94, bodyH, 28),
+      mainMat
+    );
+    drum.position.set(0, baseY + bodyH / 2, 0);
+    drum.castShadow = true;
+    drum.receiveShadow = true;
+    g.add(drum);
+
+    // Metallic accent ring around the top rim
+    const ringMat = new THREE.MeshStandardMaterial({
+      color: item.subColor || "#a37c58",
+      roughness: 0.3,
+      metalness: 0.7,
+    });
+    const ring = new THREE.Mesh(
+      new THREE.CylinderGeometry(radius + 0.3, radius + 0.3, H * 0.08, 28),
+      ringMat
+    );
+    ring.position.set(0, baseY + bodyH + H * 0.04, 0);
+    g.add(ring);
+
+    // Flat top lid & side handles
+    const lid = new THREE.Mesh(
+      new THREE.CylinderGeometry(radius * 0.95, radius * 0.98, H * 0.08, 28),
+      mainMat
+    );
+    lid.position.set(0, baseY + H - H * 0.04, 0);
+    g.add(lid);
+    addBox(W + 1.5, 2.5, 6, 0, baseY + bodyH * 0.75, 0, mainMat);
+  } else if (ftype === "coffee_maker") {
+    // Compact capsule coffee maker (rear water tank + main body + round brew head + front cup support)
+    const baseY = Number(item.baseHeight || 0);
+    const tankD = D * 0.26;
+    const bodyD = D * 0.48;
+    const trayD = D * 0.26;
+    // Rear cylindrical water tank
+    const tankMat = new THREE.MeshStandardMaterial({
+      color: "#cbd5e1",
+      transparent: true,
+      opacity: 0.55,
+      roughness: 0.15,
+    });
+    const tankR = W * 0.42;
+    const tank = new THREE.Mesh(
+      new THREE.CylinderGeometry(tankR, tankR, H * 0.85, 20),
+      tankMat
+    );
+    tank.position.set(0, baseY + H * 0.425, -D / 2 + tankD / 2 + 1);
+    g.add(tank);
+
+    // Center white/colored housing
+    addBox(W, H * 0.82, bodyD, 0, baseY + H * 0.41, -D / 2 + tankD + bodyD / 2, mainMat);
+
+    // Top round brewing head & spout
+    const headR = W * 0.48;
+    const head = new THREE.Mesh(
+      new THREE.CylinderGeometry(headR, headR, H * 0.22, 24),
+      subMat
+    );
+    head.position.set(0, baseY + H * 0.88, -D / 2 + tankD + bodyD * 0.62);
+    head.castShadow = true;
+    g.add(head);
+    addBox(3.5, 4, 5, 0, baseY + H * 0.72, D / 2 - trayD + 1, subMat);
+
+    // Front drip tray / cup support + white mug
+    addBox(W * 0.88, 3, trayD, 0, baseY + 1.5, D / 2 - trayD / 2, subMat);
+    const mug = new THREE.Mesh(
+      new THREE.CylinderGeometry(3.8, 3.4, 8.5, 18),
+      whiteMat
+    );
+    mug.position.set(0, baseY + 3 + 4.25, D / 2 - trayD / 2);
+    g.add(mug);
   } else {
     addBox(W, H, D, 0, H / 2, 0, mainMat);
   }
 
+  const baseY = Number(item.baseHeight || 0);
   const outlineGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(W + 2, H + 1, D + 2));
   const outlineMat = new THREE.LineBasicMaterial({
     color: 0x60a5fa,
@@ -675,7 +1154,7 @@ export function createFurnitureMesh(item) {
     opacity: 0.0,
   });
   const outline = new THREE.LineSegments(outlineGeo, outlineMat);
-  outline.position.set(0, H / 2, 0);
+  outline.position.set(0, baseY + H / 2, 0);
   outline.name = "selection_outline";
   g.add(outline);
 
